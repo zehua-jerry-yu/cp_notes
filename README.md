@@ -1,6 +1,12 @@
 # cp_notes
 
-# noteable problems
+Personal notes on competitive programming.
+
+# Algos
+
+2024-02-16: Learning [SOS DP](https://usaco.guide/adv/dp-sos?lang=cpp). Note that the dp definition should be $dp(x,y)$ count sum of masks that are subset of $x$ and have the last $y$ bits free.
+
+# Noteable Problems
 
 |Name                          |Diff|Link                                                                |Desc                                                                     |Notes                                                                                                                                                                                                                                                                |
 |------------------------------|----|--------------------------------------------------------------------|-------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
