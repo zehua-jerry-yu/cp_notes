@@ -141,99 +141,94 @@ vi fft_mult(const vi& a, const vi& b){
 
 
 
-
-// ntt. https://blog.csdn.net/qq_35866893/article/details/124547902
-#include <bits/stdc++.h>
-using namespace std;
-const int MAXN=3*1e6+10;
-const int mod=998244353,G=3,Gi=332748118;//绝大多数情况下如此
-int n,m,limit=1,L,r[MAXN];
-long long a[MAXN],b[MAXN];
-long long fastpow(long long a, long long k)
-{
-    long long res=1ll;
-    while(k)
-    {
-        if(k&1)
-        {
-            res=(res*a)%mod;
-        }
-        a=(a*a)%mod;
-        k>>=1ll;
+// ntt, chatgpt
+const int MOD = 998244353;
+const int ROOT = 3; // Primitive root modulo 998244353
+ 
+// Modular exponentiation
+int mod_exp(int base, int exp, int mod) {
+    int result = 1;
+    while (exp > 0) {
+        if (exp % 2 == 1)
+            result = (1LL * result * base) % mod;
+        base = (1LL * base * base) % mod;
+        exp /= 2;
     }
-    return res%mod;
+    return result;
 }
-void NTT(long long *A,int type)//NTT板子
-{
-    for(int i=0;i<limit;i++)
-    {
-        if(i<r[i])
-        {
-            swap(A[i],A[r[i]]);
-        }
+ 
+// Perform the NTT or its inverse
+void ntt(vector<int>& poly, bool invert) {
+    int n = poly.size();
+    int log_n = __builtin_ctz(n); // log2(n), since n is a power of 2
+ 
+    // Bit-reversal permutation
+    vector<int> rev(n);
+    for (int i = 0; i < n; ++i) {
+        rev[i] = (rev[i >> 1] >> 1) | ((i & 1) << (log_n - 1));
+        if (i < rev[i])
+            swap(poly[i], poly[rev[i]]);
     }
-    for(int mid=1;mid<limit;mid<<=1)
-    {
-        long long Wn=fastpow(type==1?G:Gi,(mod-1)/(mid<<1));
-        for(int j=0;j<limit;j+=(mid<<1))
-        {
-            long long w = 1;
-            for(int k = 0; k < mid; k++, w = (w * Wn) % mod)
-            {
-                 int x=A[j+k];
-                 int y=w*A[j+k+mid]%mod;
-                 A[j+k]=(x+y)%mod,
-                 A[j+k+mid]=(x-y+mod)%mod;
+ 
+    // NTT computation
+    int root = mod_exp(ROOT, (MOD - 1) / n, MOD);
+    if (invert)
+        root = mod_exp(root, MOD - 2, MOD);
+ 
+    for (int len = 2; len <= n; len *= 2) {
+        int wlen = mod_exp(root, n / len, MOD);
+        for (int i = 0; i < n; i += len) {
+            int w = 1;
+            for (int j = 0; j < len / 2; ++j) {
+                int u = poly[i + j];
+                int v = (1LL * poly[i + j + len / 2] * w) % MOD;
+                poly[i + j] = (u + v) % MOD;
+                poly[i + j + len / 2] = (u - v + MOD) % MOD;
+                w = (1LL * w * wlen) % MOD;
             }
         }
     }
-    if(type==-1)
-    {
-        long long inv =fastpow(limit,mod-2);
-        for(int i=0;i<=n+m;i++)
-        {
-           A[i]=(A[i]*inv)%mod;
-        }
+ 
+    if (invert) {
+        int n_inv = mod_exp(n, MOD - 2, MOD);
+        for (int& x : poly)
+            x = (1LL * x * n_inv) % MOD;
     }
 }
-void poly_mul(long long *a,long long *b,int deg)//多项式乘法
-{
-    while(limit<=deg)
-    {
-        limit<<=1;
-        L++;
-    }
-    for(int i=0;i<limit;i++)
-    {
-        r[i]=(r[i>>1]>>1)|((i&1)<<(L-1));
-    }
-    NTT(a,1);
-    NTT(b,1);
-    for(int i=0;i<limit;i++)
-    {
-        a[i]=(a[i]*b[i])%mod;
-    }
-    NTT(a, -1);
-}
-int main()
-{
-    cin>>n>>m;
-    for(int i = 0; i <= n; i++)
-    {
-        cin>>a[i];
-        a[i]=(a[i]+mod)%mod;
-    }
-    for(int i = 0; i <= m; i++)
-    {
-        cin>>b[i];
-        b[i]=(b[i]+mod)%mod;
-    }
-    poly_mul(a,b,n+m);
-    for(int i=0;i<=n+m;i++)
-    {
-        cout<<a[i]<<" ";
-    }
-    cout<<endl;
-    return 0;
+ 
+// Multiply two polynomials
+vector<int> polynomial_multiply(const vector<int>& a, const vector<int>& b) {
+    int n = 1;
+    while (n < (int)a.size() + (int)b.size() - 1)
+        n *= 2;
+    vector<int> fa(a), fb(b);
+    fa.resize(n);
+    fb.resize(n);
+ 
+    ntt(fa, false);
+    ntt(fb, false);
+    for (int i = 0; i < n; ++i)
+        fa[i] = (1LL * fa[i] * fb[i]) % MOD;
+    ntt(fa, true);
+ 
+    // Remove trailing zeros
+    while (!fa.empty() && fa.back() == 0)
+        fa.pop_back();
+    return fa;
 }
 
+// Example usage
+int main() {
+    vector<int> poly1 = {1, 2, 3}; // Example polynomial 1
+    vector<int> poly2 = {4, 5, 6}; // Example polynomial 2
+
+    vector<int> result = polynomial_multiply(poly1, poly2);
+
+    cout << "Resultant Polynomial: ";  // 4 13 28 27 18
+    for (int coeff : result) {
+        cout << coeff << " ";
+    }
+    cout << endl;
+
+    return 0;
+}
