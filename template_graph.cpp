@@ -99,3 +99,208 @@ void condense_graph(vector<vi>& adj1, vi& a1, vector<vi>& adj2, vector<ll>& a2, 
 };
 
 
+
+// check cycle in a cyclic graph
+vi color(n);
+bool has_cycle = true;
+function<void(int)> dfs = [&](int i){
+    color[i] = 1;
+    for(int c : ch[i]){
+        if (color[c] == 1){
+            has_cycle = false;
+        } else if (color[c] == 0){
+            dfs(c);
+        }
+    }
+    color[i] = 2;
+};
+for (int i = 0; i != n; ++i){
+    if (color[i] == 0){
+        dfs(i);
+    }
+}
+
+
+
+// dfs get euler ordering.
+vi euler_ordering;
+vector<pair<int, int>> subtree(n);  // x,y means subtree is [x, y)
+function<void(int, int)> euler = [&](int i, int p){
+    subtree[i].first = euler_ordering.size();
+    euler_ordering.push_back(i);
+    for (int c: adj[i]){
+        if (c == p) { continue; }
+        euler(c, i);
+    }
+    subtree[i].second = euler_ordering.size();
+};
+euler(0, -1);
+
+
+
+struct LCA {
+    vector<int> height, euler, first, segtree;
+    vector<bool> visited;
+    int n;
+
+    LCA(vector<vector<int>> &adj, int root=0) {
+        n = adj.size();
+        height.resize(n);
+        first.resize(n);
+        euler.reserve(n * 2);
+        visited.assign(n, false);
+        dfs(adj, root);
+        int m = euler.size();
+        segtree.resize(m * 4);
+        build(1, 0, m - 1);
+    }
+
+    void dfs(vector<vector<int>> &adj, int node, int h=0) {
+        visited[node] = true;
+        height[node] = h;
+        first[node] = euler.size();
+        euler.push_back(node);
+        for (auto to : adj[node]) {
+            if (!visited[to]) {
+                dfs(adj, to, h + 1);
+                euler.push_back(node);
+            }
+        }
+    }
+
+    void build(int node, int b, int e) {
+        if (b == e) {
+            segtree[node] = euler[b];
+        } else {
+            int mid = (b + e) / 2;
+            build(node << 1, b, mid);
+            build(node << 1 | 1, mid + 1, e);
+            int l = segtree[node << 1], r = segtree[node << 1 | 1];
+            segtree[node] = (height[l] < height[r]) ? l : r;
+        }
+    }
+
+    int query(int node, int b, int e, int L, int R) {
+        if (b > R || e < L)
+            return -1;
+        if (b >= L && e <= R)
+            return segtree[node];
+        int mid = (b + e) >> 1;
+
+        int left = query(node << 1, b, mid, L, R);
+        int right = query(node << 1 | 1, mid + 1, e, L, R);
+        if (left == -1) return right;
+        if (right == -1) return left;
+        return height[left] < height[right] ? left : right;
+    }
+
+    int lca(int u, int v) {
+        int left = first[u], right = first[v];
+        if (left > right)
+            swap(left, right);
+        return query(1, 0, euler.size() - 1, left, right);
+    }
+};
+
+
+
+// MCMF template by chatgpt. O(F(VlogV+E))
+const int INF = 1e9;
+
+// Edge structure representing flow, cost, and reverse edge index
+struct Edge {
+    int to, cap, cost, rev;
+};
+
+class MinCostMaxFlow {
+public:
+    int n;
+    vector<vector<Edge>> adj; // Adjacency list
+    vector<int> dist, potential, parent, parent_edge;
+
+    // Constructor: Initializes graph with 'n' nodes
+    MinCostMaxFlow(int n) : n(n), adj(n), dist(n), potential(n, 0), parent(n), parent_edge(n) {}
+
+    // Adds an edge with capacity and cost
+    void add_edge(int u, int v, int cap, int cost) {
+        adj[u].push_back({v, cap, cost, (int)adj[v].size()});
+        adj[v].push_back({u, 0, -cost, (int)adj[u].size() - 1});
+    }
+
+    // Dijkstra’s Algorithm to find shortest paths using reduced costs
+    bool dijkstra(int s, int t) {
+        fill(dist.begin(), dist.end(), INF);
+        fill(parent.begin(), parent.end(), -1);
+        priority_queue<pair<int, int>, vector<pair<int, int>>, greater<>> pq;
+
+        dist[s] = 0;
+        pq.push({0, s});
+
+        while (!pq.empty()) {
+            auto [d, u] = pq.top();
+            pq.pop();
+
+            if (d > dist[u]) continue; // Outdated entry, ignore
+
+            for (int i = 0; i < (int)adj[u].size(); i++) {
+                Edge &e = adj[u][i];
+                if (e.cap > 0) {
+                    int new_dist = dist[u] + e.cost + potential[u] - potential[e.to];
+                    if (new_dist < dist[e.to]) {
+                        dist[e.to] = new_dist;
+                        parent[e.to] = u;
+                        parent_edge[e.to] = i;
+                        pq.push({new_dist, e.to});
+                    }
+                }
+            }
+        }
+
+        // If no path to sink, return false
+        if (dist[t] == INF) return false;
+
+        // Update potentials to maintain reduced costs
+        for (int i = 0; i < n; i++) {
+            if (dist[i] < INF) potential[i] += dist[i];
+        }
+        return true;
+    }
+
+    // Computes Minimum Cost Maximum Flow
+    pair<int, int> min_cost_max_flow(int s, int t) {
+        int max_flow = 0, min_cost = 0;
+
+        // Bellman-Ford to compute initial potentials
+        for (int i = 0; i < n; i++) {
+            for (int u = 0; u < n; u++) {
+                for (Edge &e : adj[u]) {
+                    if (e.cap > 0) {
+                        potential[e.to] = min(potential[e.to], potential[u] + e.cost);
+                    }
+                }
+            }
+        }
+
+        // Augment flow while there exists a valid path
+        while (dijkstra(s, t)) {
+            int flow = INF;
+
+            // Find the bottleneck capacity
+            for (int v = t; v != s; v = parent[v]) {
+                int u = parent[v], i = parent_edge[v];
+                flow = min(flow, adj[u][i].cap);
+            }
+
+            // Update residual capacities and compute total cost
+            for (int v = t; v != s; v = parent[v]) {
+                int u = parent[v], i = parent_edge[v];
+                adj[u][i].cap -= flow;
+                adj[v][adj[u][i].rev].cap += flow;
+                min_cost += flow * adj[u][i].cost;
+            }
+
+            max_flow += flow;
+        }
+        return {max_flow, min_cost};
+    }
+};
