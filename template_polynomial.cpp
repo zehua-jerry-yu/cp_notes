@@ -4,7 +4,7 @@ vi fact;
 vi invfact;
 
 
-int modpow(int n, ll p){
+ll modpow(int n, ll p){
     int res = 1;
     while (p){
         if (p & 1) { res = (ll)res * n % mod; }
@@ -29,7 +29,7 @@ void init_fact(int n){
 }
 
 
-int ncr(int n, int r){
+ll ncr(int n, int r){
     if (r > n) { return 0; }
     int res = fact[n];
     res = (ll)res * invfact[r] % mod * invfact[n - r] % mod;
