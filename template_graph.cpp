@@ -1,32 +1,33 @@
-void find_maxd_c(int r, int p, vi& maxd_c, vector<vi>& adj){
-    // fill maxd_c, max distance from each node to any of its children
-    for (int c: adj[r]){
+// diameter of tree
+
+vi maxdc(n);
+vi maxdp(n);
+
+function<void(int, int)> diamdp1 = [&](int i, int p){
+    for (int c: adj[i]){
         if (c == p) { continue; }
-        find_maxd_c(c, r, maxd_c, adj);
-        maxd_c[r] = max(maxd_c[r], maxd_c[c] + 1);
+        diamdp1(c, i);
+        maxdc[i] = max(maxdc[i], maxdc[c] + 1);
     }
-}
+};
 
-
-void find_maxd(int r, int p, int maxd_p, vi& maxd_c, vi& maxd, vector<vi>& adj){
-    // find maxd for each node, which is max of max(maxd_c[c]) and maxd_p. O(n).
-    // alternatively, see https://codeforces.com/blog/entry/114644 D for simpler sol.
-    int fmaxd_c = 0;  // first max dist, i.e. max dist. should be equal to maxd_c[r].
-    int smaxd_c = 0;  // second max dist
-    for (int c: adj[r]){
+function<void(int, int)> diamdp2 = [&](int i, int p){
+    int maxd1 = maxdp[i];  // largest
+    int maxd2 = 0;  // second largest
+    for (int c: adj[i]){
         if (c == p) { continue; }
-        if (maxd_c[c] + 1 >= fmaxd_c){
-            smaxd_c = fmaxd_c; fmaxd_c = maxd_c[c] + 1;
-        } else if (maxd_c[c] + 1 >= smaxd_c){
-            smaxd_c = maxd_c[c] + 1;
+        if (maxdc[c] + 1 >= maxd1){
+            maxd2 = maxd1;
+            maxd1 = maxdc[c] + 1;
+        } else if (maxdc[c] + 1 >= maxd2){
+            maxd2 = maxdc[c] + 1;
         }
-    }
-    maxd[r] = max(maxd_p, fmaxd_c);
-    for (int c: adj[r]){
+    for (int c: adj[i]){
         if (c == p) { continue; }
-        find_maxd(c, r, max(maxd_p, (maxd_c[c] + 1 == fmaxd_c ? smaxd_c : fmaxd_c)) + 1, maxd_c, maxd, adj);
+        maxdp[c] = 1 + (maxdc[c] + 1 == maxd1 ? maxd2 : maxd1);
+        diamdp2(c, i);
     }
-}
+};
 
 
 void condense_graph(vector<vi>& adj1, vi& a1, vector<vi>& adj2, vector<ll>& a2, vi& sz){
@@ -100,41 +101,76 @@ void condense_graph(vector<vi>& adj1, vi& a1, vector<vi>& adj2, vector<ll>& a2, 
 
 
 
-// check cycle in a cyclic graph
-vi color(n);
-bool has_cycle = true;
-function<void(int)> dfs = [&](int i){
-    color[i] = 1;
-    for(int c : ch[i]){
-        if (color[c] == 1){
-            has_cycle = false;
-        } else if (color[c] == 0){
-            dfs(c);
+// check whether each node is in a cycle. the undirected graph may contain self loop and multiple edges.
+vi in_cycle(n, -1);
+vi parent(n);
+function<void(int, int)> dfs0 = [&](int i, int p){
+    if (in_cycle[i] >= 0){
+        return;
+    }
+    in_cycle[i] = 2;
+    parent[i] = p;
+    bool skipped_parent = false;
+    int t = i;
+    for (auto [c, j]: adj[i]){
+        if (c == p && !skipped_parent){
+            skipped_parent = true;
+            continue;
+        }
+        dfs0(c, i);
+        if (in_cycle[c] == 2){
+            while (t != c){
+                in_cycle[t] = 1;
+                t = parent[t];
+            }
+            in_cycle[c] = 1;
         }
     }
-    color[i] = 2;
-};
-for (int i = 0; i != n; ++i){
-    if (color[i] == 0){
-        dfs(i);
+    if (in_cycle[i] == 2){
+        in_cycle[i] = 0;
     }
-}
+};
 
 
 
-// dfs get euler ordering.
+// dfs get euler ordering. BE CAREFUL USE DP ON EULER SPACE!!!
 vi euler_ordering;
-vector<pair<int, int>> subtree(n);  // x,y means subtree is [x, y)
+vector<array<int, 2>> subtree(n);  // x,y means subtree is [x, y)
 function<void(int, int)> euler = [&](int i, int p){
-    subtree[i].first = euler_ordering.size();
+    subtree[i][0] = euler_ordering.size();
     euler_ordering.push_back(i);
     for (int c: adj[i]){
         if (c == p) { continue; }
         euler(c, i);
     }
-    subtree[i].second = euler_ordering.size();
+    subtree[i][1] = euler_ordering.size();
 };
 euler(0, -1);
+
+
+
+vi eulerian_path(int r, int m, vector<vector<array<int, 2>>> adj){
+    // adj store <v, idx of edge>. 
+    // return traversal of edges (can easily change to nodes).
+    // r: the starting node. 
+    // assume we have already check existence of eu path.
+    int n = adj.size();
+    vi res;
+    vector<bool> visited(m, false);  // whether the edge is visited
+    function<void(int)> dfs = [&](int i){
+        while (!adj[i].empty()){
+            auto [v, j] = adj[i].back();
+            adj[i].pop_back();
+            if (visited[j]) { continue; }
+            visited[j] = true;
+            dfs(v);
+            res.push_back(j);
+        }
+    };
+    dfs(r);
+    return res;
+};
+
 
 
 
@@ -204,9 +240,221 @@ struct LCA {
 
 
 
-// MCMF template by chatgpt. O(F(VlogV+E))
-const int INF = 1e9;
+struct FlowEdge {
+    int to, cap, rev;
+};
+ 
 
+struct MaxFlow{
+    int n;
+    const int MAX = 1e8;
+    vi parent;
+    vector<vi> cap;  // nxn matrix
+    vector<vi> adj;
+ 
+    int bfs(int s, int t){
+        parent = vi(n, -1);
+        parent[s] = -2;
+        queue<pair<int, int>> q;
+        q.emplace(s, MAX);
+        while (!q.empty()){
+            auto [i, flow] = q.front();
+            q.pop();
+            for (int c: adj[i]){
+                if (parent[c] == -1 && cap[i][c]){
+                    parent[c] = i;
+                    int newflow = min(flow, cap[i][c]);
+                    if (c == t){
+                        return newflow;
+                    }
+                    q.emplace(c, newflow);
+                }
+            }
+        }
+        return 0;  // did not find augmenting path
+    }
+ 
+    int maxflow(int s, int t){
+        int flow = 0;
+        int newflow = 0;
+        while (newflow = bfs(s, t)){
+            flow += newflow;
+            int i = t;
+            while (i != s){
+                int p = parent[i];
+                cap[p][i] -= newflow;
+                cap[i][p] += newflow;
+                i = p;
+            }
+        }
+        return flow;
+    }
+ 
+    MaxFlow(int n_){
+        n = n_;
+        cap = vector<vi>(n, vi(n));
+        adj = vector<vi>(n);
+    }
+};
+
+
+struct MaxFlow{
+    int n;
+    const int MAX = 1e8;
+    vi parent;
+    vector<vi> cap;  // nxn matrix
+    vector<vi> adj;
+ 
+    int bfs(int s, int t){
+        parent = vi(n, -1);
+        parent[s] = -2;
+        queue<pair<int, int>> q;
+        q.emplace(s, MAX);
+        while (!q.empty()){
+            auto [i, flow] = q.front();
+            q.pop();
+            for (int c: adj[i]){
+                if (parent[c] == -1 && cap[i][c]){
+                    parent[c] = i;
+                    int newflow = min(flow, cap[i][c]);
+                    if (c == t){
+                        return newflow;
+                    }
+                    q.emplace(c, newflow);
+                }
+            }
+        }
+        return 0;  // did not find augmenting path
+    }
+ 
+    int maxflow(int s, int t){
+        int flow = 0;
+        int newflow = 0;
+        while (newflow = bfs(s, t)){
+            flow += newflow;
+            int i = t;
+            while (i != s){
+                int p = parent[i];
+                cap[p][i] -= newflow;
+                cap[i][p] += newflow;
+                i = p;
+            }
+        }
+        return flow;
+    }
+ 
+    MaxFlow(int n_){
+        n = n_;
+        cap = vector<vi>(n, vi(n));
+        adj = vector<vi>(n);
+    }
+};
+
+
+class MaxFlow {
+public:
+    int n, s, t, _max_flow = 0;
+    vector<vector<FlowEdge>> adj;
+    vi visited, parent, parent_edge;
+ 
+    MaxFlow(int n, int s, int t) : n(n), s(s), t(t), adj(n), visited(n), parent(n), parent_edge(n) {}
+ 
+    void add_edge(int u, int v, int cap) {
+        // cout << "adding edge from " << u + 1 << " to " << v + 1 << ", cap= " << cap << "\n";
+        adj[u].push_back({v, cap, (int)adj[v].size()});
+        adj[v].push_back({u, 0, (int)adj[u].size() - 1});
+    }
+ 
+    bool ford_fulkerson(int ss, int tt){
+        // one round of bfs with ford fulkerson
+        fill(visited.begin(), visited.end(), 0);
+        fill(parent.begin(), parent.end(), -1);
+        queue<int> q;
+        q.push(ss);
+        visited[ss] = 1;
+        while (!q.empty()){
+            int i = q.front();
+            q.pop();
+            for (int j = 0; j != (int)adj[i].size(); ++j){
+                const FlowEdge& e = adj[i][j];
+                if (e.cap && !visited[e.to]){
+                    visited[e.to] = 1;
+                    parent[e.to] = i;
+                    parent_edge[e.to] = j;
+                    q.push(e.to);
+                }
+            }
+        }
+        return visited[tt];
+    }
+ 
+    void increment_cap(int u, int v){
+        // cout << "incrementing " << u + 1 << " , " << v + 1 << "\n";
+        // increment the capacity of edge from u to v
+        for (FlowEdge& e: adj[u]){
+            if (e.to == v){
+                ++e.cap;
+                return;
+            }
+        }
+        assert(false);  // not found
+    }
+ 
+    void decrement_cap(int u, int v){
+        // cout << "decrementing " << u + 1 << " , " << v + 1 << "\n";
+        for (FlowEdge& e: adj[u]){
+            if (e.to == v){
+                if (e.cap == 0){
+                    // reduce the flow of a s->u->v->t path.
+                    // equivalent to reducing cap of a t->v->u->s path.
+                    assert(ford_fulkerson(t, v));
+                    for (int i = v; i != t; i = parent[i]){
+                        int inxt = parent[i];
+                        int j = parent_edge[i];
+                        --adj[inxt][j].cap;
+                        ++adj[i][adj[inxt][j].rev].cap;
+                    }
+                    assert(ford_fulkerson(u, s));
+                    for (int i = s; i != u; i = parent[i]){
+                        int inxt = parent[i];
+                        int j = parent_edge[i];
+                        --adj[inxt][j].cap;
+                        ++adj[i][adj[inxt][j].rev].cap;
+                    }
+                    assert(adj[v][e.rev].cap > 0);
+                    --adj[v][e.rev].cap;
+                    ++e.cap;
+                    --_max_flow;
+                }
+                --e.cap;
+                return;
+            }
+        }
+        assert(false);  // not found
+    }
+ 
+    int max_flow(){
+        const int INF = 0x3f3f3f;
+        while (ford_fulkerson(s, t)){
+            int flow = INF;
+            for (int v = t; v != s; v = parent[v]) {
+                int u = parent[v], i = parent_edge[v];
+                flow = min(flow, adj[u][i].cap);
+            }
+            for (int v = t; v != s; v = parent[v]) {
+                int u = parent[v], i = parent_edge[v];
+                adj[u][i].cap -= flow;
+                adj[v][adj[u][i].rev].cap += flow;
+            }
+            _max_flow += flow;
+        }
+        return _max_flow;
+    }
+};
+ 
+
+
+// MCMF template by chatgpt. O(F(VlogV+E))
 // Edge structure representing flow, cost, and reverse edge index
 struct Edge {
     int to, cap, cost, rev;
@@ -215,6 +463,7 @@ struct Edge {
 class MinCostMaxFlow {
 public:
     int n;
+    const int INF = 1e9;
     vector<vector<Edge>> adj; // Adjacency list
     vector<int> dist, potential, parent, parent_edge;
 
