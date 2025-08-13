@@ -80,21 +80,85 @@ public:
 };
 
 
+struct TwoSat {
+    int n;  // number of variables
+    vector<vector<int>> g, rg; // implication graph and its reverse
+    vector<int> order, comp;
+    vector<bool> used;
+    
+    TwoSat(int vars) : n(vars) {
+        g.resize(2 * n);
+        rg.resize(2 * n);
+        used.assign(2 * n, false);
+        comp.assign(2 * n, -1);
+        assignment.assign(n, false);
+    }
+    
+    // x => y. for condition x OR y, call add_clause(!x, y) & add_caluse(!y, x)
+    void add_clause(int x, int y) {
+        // cout << "adding " << x << " " << y << "\n";
+        g[x].push_back(y);
+        rg[y].push_back(x);
+    }
+    
+    // First DFS on the graph to compute the order of vertices.
+    void dfs1(int v) {
+        used[v] = true;
+        for (int w : g[v])
+            if (!used[w])
+                dfs1(w);
+        order.push_back(v);
+    }
+    
+    // Second DFS on the reverse graph to assign components.
+    void dfs2(int v, int cl) {
+        comp[v] = cl;
+        for (int w : rg[v])
+            if (comp[w] == -1)
+                dfs2(w, cl);
+    }
+    
+    // Solve the 2-SAT instance.
+    // Returns true if the instance is satisfiable and fills `assignment`.
+    bool solve() {
+        int m = 2 * n;
+        for (int i = 0; i < m; i++) {
+            if (!used[i])
+                dfs1(i);
+        }
+        int cl = 0;
+        for (int i = m - 1; i >= 0; i--) {
+            int v = order[i];
+            if (comp[v] == -1)
+                dfs2(v, cl++);
+        }
+        // Check for each variable if it and its negation belong to the same component.
+        for (int i = 0; i < n; i++) {
+            if (comp[2 * i] == comp[2 * i + 1])
+                return false; // unsatisfiable
+        }
+        return true;
+    }
+};
+
+
+int d[800005];
+int laz[800005];
 
 template <typename T>
 class STree{
 public:
     int n = 0;
     T BASE = -1e8;                                          // CHANGE THIS
-    vector<T> d;
-    vector<T> laz;
     inline int lc(int j) { return 2 * j + 1; }
     inline int rc(int j) { return 2 * j + 2; }
     STree() { }
     STree(vector<T>& data){
         n = data.size();
-        d.resize(4 * n, BASE);
-        laz.resize(4 * n, 0);
+        for (int i = 0; i != 4 * n; ++i){
+            d[i] = BASE;
+            laz[i] = 0;
+        }
         build(0, 0, n, data);
     }
     void push(int j, int lj, int rj){
@@ -140,22 +204,25 @@ public:
 
 
 
+int d[800005];
+int laz[800005];
+int laz_set[800005];
+
 template <typename T>
 class STree{
 public:
     int n = 0;
     T BASE = -1e8;                                          // CHANGE THIS
-    vector<T> d;
-    vector<T> laz;
-    vector<bool> laz_set;
     inline int lc(int j) { return 2 * j + 1; }
     inline int rc(int j) { return 2 * j + 2; }
     STree() { }
     STree(vector<T>& data){
         n = data.size();
-        d.resize(4 * n, BASE);
-        laz.resize(4 * n, 0);
-        laz_set.resize(4 * n, false);
+        for (int i = 0; i != 4 * n; ++i){
+            d[i] = BASE;
+            laz[i] = 0;
+            laz_set[i] = 0;
+        }
         build(0, 0, n, data);
     }
     void push(int j, int lj, int rj){
@@ -163,12 +230,12 @@ public:
         d[j] = laz[j];                                      // CHANGE THIS
         if (rj - lj > 1){
             laz[lc(j)] = laz[j];
-            laz_set[lc(j)] = true;
+            laz_set[lc(j)] = 1;
             laz[rc(j)] = laz[j];
-            laz_set[rc(j)] = true;
+            laz_set[rc(j)] = 1;
         }
         laz[j] = 0;
-        laz_set[j] = false;
+        laz_set[j] = 0;
     }
     inline T cb(T resl, T resr){
         return max(resl, resr);                             // CHANGE THIS
@@ -192,7 +259,7 @@ public:
         if (lj >= ri || rj <= li || lj == rj) { return; }
         if (li <= lj && rj <= ri){
             laz[j] = val;
-            laz_set[j] = true;
+            laz_set[j] = 1;
             push(j, lj, rj);
             return;
         }
@@ -205,87 +272,13 @@ public:
 
 
 
-// template for range sum of original array, if given diff array
 template <typename T>
-class STree{
-public:
-    int n = 0;
-    T BASE = 0;                                          // CHANGE THIS
-    vector<T> d;   // normal sum
-    vector<T> e;   // n*a[1] + (n-1)*a[2] + ... kind of sum
-    vector<T> laz;
-    inline int lc(int j) { return 2 * j + 1; }
-    inline int rc(int j) { return 2 * j + 2; }
-    STree() { }
-    STree(vector<T>& data){
-        n = data.size();
-        d.resize(4 * n, BASE);
-        e.resize(4 * n, BASE);
-        laz.resize(4 * n, 0);
-        build(0, 0, n, data);
-    }
-    void push(int j, int lj, int rj){
-        if (lj == rj) { return; }
-        ll p = rj - lj;
-        d[j] += laz[j] * p;                                     // CHANGE THIS
-        e[j] += laz[j] * (p * (p + 1) / 2);
-        if (rj - lj > 1){
-            laz[lc(j)] += laz[j];
-            laz[rc(j)] += laz[j];
-        }
-        laz[j] = 0;
-    }
-    void build(int j, int lj, int rj, vector<T>& data){
-        if (rj == lj + 1) { d[j] = data[lj]; e[j] = data[lj]; return; }
-        build(lc(j), lj, (lj + rj) / 2, data);
-        build(rc(j), (lj + rj) / 2, rj, data);
-        d[j] = d[lc(j)] + d[rc(j)];
-        e[j] = e[lc(j)] + e[rc(j)] + (rj - (lj + rj) / 2) * d[lc(j)];
-    }
-    void r_que_aux(int li, int ri, int j, int lj, int rj, T& resd, T& rese, int& len){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { resd = 0; rese = 0; len = 0; return; }
-        if (lj >= li && rj <= ri) { resd = d[j]; rese = e[j]; len = rj - lj; return; }
-        T resd_l = 0; T rese_l = 0; int lenl = 0;
-        r_que_aux(li, ri, lc(j), lj, (lj + rj) / 2, resd_l, rese_l, lenl);
-        T resd_r = 0; T rese_r = 0; int lenr = 0;
-        r_que_aux(li, ri, rc(j), (lj + rj) / 2, rj, resd_r, rese_r, lenr);
-        resd = resd_l + resd_r;
-        rese = rese_l + rese_r + lenr * resd_l;
-        len = lenl + lenr;
-    }
-    void r_que(int li, int ri, T& resd, T& rese){
-        int len;
-        return r_que_aux(li, ri, 0, 0, n, resd, rese, len);
-    }
-    void r_inc_aux(int li, int ri, T val, int j, int lj, int rj){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { return; }
-        if (li <= lj && rj <= ri){
-            laz[j] += val;
-            push(j, lj, rj);
-            return;
-        }
-        r_inc_aux(li, ri, val, lc(j), lj, (lj + rj) / 2);
-        r_inc_aux(li, ri, val, rc(j), (lj + rj) / 2, rj);
-        d[j] = d[lc(j)] + d[rc(j)];
-        e[j] = e[lc(j)] + e[rc(j)] + (rj - (lj + rj) / 2) * d[lc(j)];
-    }
-    void r_inc(int li, int ri, T val) {
-        r_inc_aux(li, ri, val, 0, 0, n);
-    }
-};
-
-
-
-template <typename T>
-class FTree {  // see https://oi-wiki.org/ds/fenwick/ for proof.
+class FTree {
 public:
     vector<T> d;
     FTree() { }
     FTree(int n): d(n + 1, 0) { }
-    T prefix_sum(int i) {
-        ++i;
+    T prefix_sum(int i) {  // sum of [0,i)
         T res = 0;
         while (i){
             res += d[i];
@@ -310,7 +303,7 @@ public:
     Trie* children[26] = {};
     Trie() { }
     ~Trie() {
-        for (int i = 0; i != 26; ++i) { delete children[i];}
+        for (int i = 0; i != 26; ++i) { delete children[i]; }  // careful - delete does not set to nullptr!
     }
     void insert(string& word) {
         Trie* node = this;
