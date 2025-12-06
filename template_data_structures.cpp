@@ -142,134 +142,85 @@ struct TwoSat {
 };
 
 
-int d[800005];
-int laz[800005];
-
-template <typename T>
-class STree{
-public:
+template<typename T>
+struct STree {
     int n = 0;
-    T BASE = -1e8;                                          // CHANGE THIS
-    inline int lc(int j) { return 2 * j + 1; }
-    inline int rc(int j) { return 2 * j + 2; }
+    int N = 0;
+    int H = 0;
+    T BASE = -1e8;
+    vector<T> t;
+    vector<T> lazy;
+    vector<char> lazy_set;
+
     STree() { }
-    STree(vector<T>& data){
-        n = data.size();
-        for (int i = 0; i != 4 * n; ++i){
-            d[i] = BASE;
-            laz[i] = 0;
+
+    STree(const vector<T>& a) {
+        n = (int)a.size();
+        N = 1; H = 0;
+        while (N < max(1, n)) { N <<= 1; ++H; }
+        t.assign(2 * N, BASE);
+        lazy.assign(N, BASE);
+        lazy_set.assign(N, 0);
+        for (int i = 0; i < n; ++i) t[N + i] = a[i];
+        for (int i = N - 1; i >= 1; --i) t[i] = max(t[i<<1], t[i<<1|1]);
+    }
+
+    inline void apply_node(int p, T v) {
+        t[p] = max(t[p], v);
+        if (p < N) {
+            if (!lazy_set[p] || lazy[p] < v) lazy[p] = v;
+            lazy_set[p] = 1;
         }
-        build(0, 0, n, data);
     }
-    void push(int j, int lj, int rj){
-        if (lj == rj) { return; }
-        d[j] += laz[j];                                     // CHANGE THIS
-        if (rj - lj > 1){
-            laz[lc(j)] += laz[j];
-            laz[rc(j)] += laz[j];
+
+    inline void push(int p) {
+        if (p >= N) return;
+        if (!lazy_set[p]) return;
+        T v = lazy[p];
+        apply_node(p<<1, v);
+        apply_node(p<<1|1, v);
+        lazy[p] = BASE;
+        lazy_set[p] = 0;
+    }
+
+    inline void pull(int p) { t[p] = max(t[p<<1], t[p<<1|1]); }
+
+    // push all ancestors of node p (p in tree indexing)
+    inline void push_path(int p) {
+        for (int s = H; s > 0; --s) push(p >> s);
+    }
+
+    // range chmax [l, r)
+    void r_set(int l, int r, T v) {
+        if (l >= r) return;
+        int L = l + N, R = r + N;
+        push_path(L);
+        push_path(R - 1);
+        int L0 = L, R0 = R;
+        while (L < R) {
+            if (L & 1) apply_node(L++, v);
+            if (R & 1) apply_node(--R, v);
+            L >>= 1; R >>= 1;
         }
-        laz[j] = 0;
+        for (int i = L0; i > 1; i >>= 1) pull(i >> 1);
+        for (int i = R0 - 1; i > 1; i >>= 1) pull(i >> 1);
     }
-    inline T cb(T resl, T resr){
-        return max(resl, resr);                             // CHANGE THIS
-    }
-    void build(int j, int lj, int rj, vector<T>& data){
-        if (rj == lj + 1){ d[j] = data[lj]; return; }
-        build(lc(j), lj, (lj + rj) / 2, data);
-        build(rc(j), (lj + rj) / 2, rj, data);
-        d[j] = cb(d[lc(j)], d[rc(j)]);
-    }
-    T r_que_aux(int li, int ri, int j, int lj, int rj){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { return BASE; }
-        if (lj >= li && rj <= ri) { return d[j]; }
-        return cb(r_que_aux(li, ri, lc(j), lj, (lj + rj) / 2), 
-            r_que_aux(li, ri, rc(j), (lj + rj) / 2, rj));
-    }
-    T r_que(int li, int ri) { return r_que_aux(li, ri, 0, 0, n); }
-    void r_inc_aux(int li, int ri, T val, int j, int lj, int rj){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { return; }
-        if (li <= lj && rj <= ri){
-            laz[j] += val;
-            push(j, lj, rj);
-            return;
+
+    // range max query [l, r)
+    T r_que(int l, int r) {
+        if (l >= r) return BASE;
+        int L = l + N, R = r + N;
+        push_path(L);
+        push_path(R - 1);
+        T resL = BASE, resR = BASE;
+        while (L < R) {
+            if (L & 1) resL = max(resL, t[L++]);
+            if (R & 1) resR = max(t[--R], resR);
+            L >>= 1; R >>= 1;
         }
-        r_inc_aux(li, ri, val, lc(j), lj, (lj + rj) / 2);
-        r_inc_aux(li, ri, val, rc(j), (lj + rj) / 2, rj);
-        d[j] = cb(d[lc(j)], d[rc(j)]);
+        return max(resL, resR);
     }
-    void r_inc(int li, int ri, T val) { r_inc_aux(li, ri, val, 0, 0, n); }
 };
-
-
-
-int d[800005];
-int laz[800005];
-int laz_set[800005];
-
-template <typename T>
-class STree{
-public:
-    int n = 0;
-    T BASE = -1e8;                                          // CHANGE THIS
-    inline int lc(int j) { return 2 * j + 1; }
-    inline int rc(int j) { return 2 * j + 2; }
-    STree() { }
-    STree(vector<T>& data){
-        n = data.size();
-        for (int i = 0; i != 4 * n; ++i){
-            d[i] = BASE;
-            laz[i] = 0;
-            laz_set[i] = 0;
-        }
-        build(0, 0, n, data);
-    }
-    void push(int j, int lj, int rj){
-        if (lj == rj || !laz_set[j]) { return; }
-        d[j] = laz[j];                                      // CHANGE THIS
-        if (rj - lj > 1){
-            laz[lc(j)] = laz[j];
-            laz_set[lc(j)] = 1;
-            laz[rc(j)] = laz[j];
-            laz_set[rc(j)] = 1;
-        }
-        laz[j] = 0;
-        laz_set[j] = 0;
-    }
-    inline T cb(T resl, T resr){
-        return max(resl, resr);                             // CHANGE THIS
-    }
-    void build(int j, int lj, int rj, vector<T>& data){
-        if (rj == lj + 1){ d[j] = data[lj]; return; }
-        build(lc(j), lj, (lj + rj) / 2, data);
-        build(rc(j), (lj + rj) / 2, rj, data);
-        d[j] = cb(d[lc(j)], d[rc(j)]);
-    }
-    T r_que_aux(int li, int ri, int j, int lj, int rj){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { return BASE; }
-        if (lj >= li && rj <= ri) { return d[j]; }
-        return cb(r_que_aux(li, ri, lc(j), lj, (lj + rj) / 2), 
-            r_que_aux(li, ri, rc(j), (lj + rj) / 2, rj));
-    }
-    T r_que(int li, int ri) { return r_que_aux(li, ri, 0, 0, n); }
-    void r_set_aux(int li, int ri, T val, int j, int lj, int rj){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { return; }
-        if (li <= lj && rj <= ri){
-            laz[j] = val;
-            laz_set[j] = 1;
-            push(j, lj, rj);
-            return;
-        }
-        r_set_aux(li, ri, val, lc(j), lj, (lj + rj) / 2);
-        r_set_aux(li, ri, val, rc(j), (lj + rj) / 2, rj);
-        d[j] = cb(d[lc(j)], d[rc(j)]);
-    }
-    void r_set(int li, int ri, T val) { r_set_aux(li, ri, val, 0, 0, n); }
-};
-
 
 
 template <typename T>
