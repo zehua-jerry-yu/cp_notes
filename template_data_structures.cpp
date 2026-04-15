@@ -224,6 +224,70 @@ struct STree {
 
 
 template <typename T>
+class STree{
+public:
+    int n = 0;
+    T BASE = -1e8;                                          // CHANGE THIS
+    vector<T> d;
+    vector<T> laz;
+    vector<bool> laz_set;
+    inline int lc(int j) { return 2 * j + 1; }
+    inline int rc(int j) { return 2 * j + 2; }
+    STree() { }
+    STree(vector<T>& data){
+        n = data.size();
+        d.resize(4 * n, BASE);
+        laz.resize(4 * n, 0);
+        laz_set.resize(4 * n, false);
+        build(0, 0, n, data);
+    }
+    void push(int j, int lj, int rj){
+        if (lj == rj || !laz_set[j]) { return; }
+        d[j] = laz[j];                                      // CHANGE THIS
+        if (rj - lj > 1){
+            laz[lc(j)] = laz[j];                                      // CHANGE THIS
+            laz_set[lc(j)] = true;
+            laz[rc(j)] = laz[j];                                      // CHANGE THIS
+            laz_set[rc(j)] = true;
+        }
+        laz[j] = 0;
+        laz_set[j] = false;
+    }
+    inline T cb(T resl, T resr){
+        return max(resl, resr);                             // CHANGE THIS
+    }
+    void build(int j, int lj, int rj, vector<T>& data){
+        if (rj == lj + 1){ d[j] = data[lj]; return; }
+        build(lc(j), lj, (lj + rj) / 2, data);
+        build(rc(j), (lj + rj) / 2, rj, data);
+        d[j] = cb(d[lc(j)], d[rc(j)]);
+    }
+    T r_que_aux(int li, int ri, int j, int lj, int rj){
+        push(j, lj, rj);
+        if (lj >= ri || rj <= li || lj == rj) { return BASE; }
+        if (lj >= li && rj <= ri) { return d[j]; }
+        return cb(r_que_aux(li, ri, lc(j), lj, (lj + rj) / 2), 
+            r_que_aux(li, ri, rc(j), (lj + rj) / 2, rj));
+    }
+    T r_que(int li, int ri) { return r_que_aux(li, ri, 0, 0, n); }
+    void r_set_aux(int li, int ri, T val, int j, int lj, int rj){
+        push(j, lj, rj);
+        if (lj >= ri || rj <= li || lj == rj) { return; }
+        if (li <= lj && rj <= ri){
+            laz[j] = val;                               // CHANGE THIS
+            laz_set[j] = true;
+            push(j, lj, rj);
+            return;
+        }
+        r_set_aux(li, ri, val, lc(j), lj, (lj + rj) / 2);
+        r_set_aux(li, ri, val, rc(j), (lj + rj) / 2, rj);
+        d[j] = cb(d[lc(j)], d[rc(j)]);
+    }
+    void r_set(int li, int ri, T val) { r_set_aux(li, ri, val, 0, 0, n); }
+};
+
+
+template <typename T>
 class FTree {
 public:
     vector<T> d;
