@@ -101,35 +101,71 @@ void condense_graph(vector<vi>& adj1, vi& a1, vector<vi>& adj2, vector<ll>& a2, 
 
 
 
-// check whether each node is in a cycle. the undirected graph may contain self loop and multiple edges.
-vi in_cycle(n, -1);
-vi parent(n);
-function<void(int, int)> dfs0 = [&](int i, int p){
-    if (in_cycle[i] >= 0){
-        return;
-    }
-    in_cycle[i] = 2;
-    parent[i] = p;
-    bool skipped_parent = false;
-    int t = i;
-    for (auto [c, j]: adj[i]){
-        if (c == p && !skipped_parent){
-            skipped_parent = true;
-            continue;
-        }
-        dfs0(c, i);
-        if (in_cycle[c] == 2){
-            while (t != c){
-                in_cycle[t] = 1;
-                t = parent[t];
+void find_cycle_info(  // for an undirected graph
+    const vector<vector<pair<int,int>>>& adj,
+    vector<bool>& node_in_cycle,
+    vector<bool>& edge_in_cycle
+) {
+    int n = adj.size();
+    int m = 0;
+    for (auto& v : adj) m += v.size();
+    m /= 2;
+
+    vector<int> tin(n, -1), low(n, -1);
+    vector<bool> visited(n, false);
+    vector<bool> is_bridge(m, false);
+    int timer = 0;
+
+    function<void(int,int)> dfs = [&](int u, int p_edge) {
+        visited[u] = true;
+        tin[u] = low[u] = timer++;
+        for (auto [v, id] : adj[u]) {
+            if (id == p_edge) continue;
+            if (visited[v]) {
+                low[u] = min(low[u], tin[v]);
+            } else {
+                dfs(v, id);
+                low[u] = min(low[u], low[v]);
+                if (low[v] > tin[u]) {
+                    is_bridge[id] = true;
+                }
             }
-            in_cycle[c] = 1;
+        }
+    };
+
+    for (int i = 0; i < n; i++) {
+        if (!visited[i]) dfs(i, -1);
+    }
+
+    vector<int> deg(n);
+    for (int i = 0; i < n; i++) deg[i] = (int)adj[i].size();
+
+    node_in_cycle.assign(n, true);
+    queue<int> q;
+    for (int i = 0; i < n; i++) {
+        if (deg[i] <= 1) {
+            q.push(i);
+            node_in_cycle[i] = false;
         }
     }
-    if (in_cycle[i] == 2){
-        in_cycle[i] = 0;
+    while (!q.empty()) {
+        int u = q.front(); q.pop();
+        for (auto [v, id] : adj[u]) {
+            if (node_in_cycle[v]) {
+                deg[v]--;
+                if (deg[v] == 1) {
+                    node_in_cycle[v] = false;
+                    q.push(v);
+                }
+            }
+        }
     }
-};
+
+    edge_in_cycle.assign(m, false);
+    for (int i = 0; i < m; i++) {
+        edge_in_cycle[i] = !is_bridge[i];
+    }
+}
 
 
 
@@ -149,12 +185,11 @@ euler(0, -1);
 
 
 
-vi eulerian_path(int r, int m, vector<vector<array<int, 2>>> adj){
+vi eulerian_path(int r, int m, vector<vector<pair<int, int>>> adj){
     // adj store <v, idx of edge>. 
     // return traversal of edges (can easily change to nodes).
     // r: the starting node. 
     // assume we have already check existence of eu path.
-    int n = adj.size();
     vi res;
     vector<bool> visited(m, false);  // whether the edge is visited
     function<void(int)> dfs = [&](int i){
