@@ -142,148 +142,101 @@ struct TwoSat {
 };
 
 
-template<typename T>
+template<class Info, class Tag>
 struct STree {
-    int n = 0;
-    int N = 0;
-    int H = 0;
-    T BASE = -1e8;
-    vector<T> t;
-    vector<T> lazy;
-    vector<char> lazy_set;
-
-    STree() { }
-
-    STree(const vector<T>& a) {
-        n = (int)a.size();
-        N = 1; H = 0;
+    int n = 0, N = 1, H = 0;
+    vector<Info> info;
+    vector<Tag> tag; 
+ 
+    STree() {}
+    template<typename T>
+    STree(const vector<T>& v) {
+        n = (int)v.size();
         while (N < max(1, n)) { N <<= 1; ++H; }
-        t.assign(2 * N, BASE);
-        lazy.assign(N, BASE);
-        lazy_set.assign(N, 0);
-        for (int i = 0; i < n; ++i) t[N + i] = a[i];
-        for (int i = N - 1; i >= 1; --i) t[i] = max(t[i<<1], t[i<<1|1]);
+        info.assign(2 * N, Info());
+        tag.assign(N, Tag());
+        for (int i = 0; i < n; ++i) info[N + i] = Info(v[i]);
+        for (int p = N - 1; p >= 1; --p) info[p] = combine(info[p<<1], info[p<<1|1]);
     }
-
-    inline void apply_node(int p, T v) {
-        t[p] = max(t[p], v);
-        if (p < N) {
-            if (!lazy_set[p] || lazy[p] < v) lazy[p] = v;
-            lazy_set[p] = 1;
+ 
+    void apply(int p, const Tag& t) {
+        info[p].apply(t);
+        if (p < N) tag[p].apply(t);
+    }
+    void down(int p) {
+        for (int s = H; s >= 1; --s) {
+            int a = p >> s;
+            apply(a<<1, tag[a]);
+            apply(a<<1|1, tag[a]);
+            tag[a] = Tag();
         }
     }
-
-    inline void push(int p) {
-        if (p >= N) return;
-        if (!lazy_set[p]) return;
-        T v = lazy[p];
-        apply_node(p<<1, v);
-        apply_node(p<<1|1, v);
-        lazy[p] = BASE;
-        lazy_set[p] = 0;
+    void up(int p) {
+        for (int s = 1; s <= H; ++s) {
+            int a = p >> s;
+            info[a] = combine(info[a<<1], info[a<<1|1]);
+            info[a].apply(tag[a]);
+        }
     }
-
-    inline void pull(int p) { t[p] = max(t[p<<1], t[p<<1|1]); }
-
-    // push all ancestors of node p (p in tree indexing)
-    inline void push_path(int p) {
-        for (int s = H; s > 0; --s) push(p >> s);
-    }
-
-    // range chmax [l, r)
-    void r_set(int l, int r, T v) {
+ 
+    void r_set(int l, int r, Tag t) {
         if (l >= r) return;
         int L = l + N, R = r + N;
-        push_path(L);
-        push_path(R - 1);
-        int L0 = L, R0 = R;
-        while (L < R) {
-            if (L & 1) apply_node(L++, v);
-            if (R & 1) apply_node(--R, v);
-            L >>= 1; R >>= 1;
+        down(L); down(R - 1);
+        for (int lo = L, ro = R; lo < ro; lo >>= 1, ro >>= 1) {
+            if (lo & 1) apply(lo++, t);
+            if (ro & 1) apply(--ro, t);
         }
-        for (int i = L0; i > 1; i >>= 1) pull(i >> 1);
-        for (int i = R0 - 1; i > 1; i >>= 1) pull(i >> 1);
+        up(L); up(R - 1);
     }
-
-    // range max query [l, r)
-    T r_que(int l, int r) {
-        if (l >= r) return BASE;
+ 
+    Info r_que(int l, int r) {
+        if (l >= r) return Info();
         int L = l + N, R = r + N;
-        push_path(L);
-        push_path(R - 1);
-        T resL = BASE, resR = BASE;
+        down(L); down(R - 1);
+        Info resL = Info(), resR = Info();
         while (L < R) {
-            if (L & 1) resL = max(resL, t[L++]);
-            if (R & 1) resR = max(t[--R], resR);
+            if (L & 1) resL = combine(resL, info[L++]);
+            if (R & 1) resR = combine(info[--R], resR);
             L >>= 1; R >>= 1;
         }
-        return max(resL, resR);
+        return combine(resL, resR);
     }
 };
 
 
-template <typename T>
-class STree{
-public:
-    int n = 0;
-    T BASE = -1e8;                                          // CHANGE THIS
-    vector<T> d;
-    vector<T> laz;
-    vector<bool> laz_set;
-    inline int lc(int j) { return 2 * j + 1; }
-    inline int rc(int j) { return 2 * j + 2; }
-    STree() { }
-    STree(vector<T>& data){
-        n = data.size();
-        d.resize(4 * n, BASE);
-        laz.resize(4 * n, 0);
-        laz_set.resize(4 * n, false);
-        build(0, 0, n, data);
+template<typename T>
+struct SetTag {
+    bool on = false; T x = 0;
+    void apply(const SetTag<T>& t) { if (t.on) { on = true; x = t.x; } }
+};
+
+template<typename T>
+struct SumInfo {
+    T x = 0;
+    int sz = 0;
+    SumInfo() = default;
+    SumInfo(T v) : x(v), sz(1) {}
+    void apply(const SetTag<T>& t) { if (t.on) x = t.x * sz; }
+    friend SumInfo combine(const SumInfo& a, const SumInfo& b) {
+        SumInfo r; 
+        r.x = a.x + b.x; 
+        r.sz = a.sz + b.sz; 
+        return r;
     }
-    void push(int j, int lj, int rj){
-        if (lj == rj || !laz_set[j]) { return; }
-        d[j] = laz[j];                                      // CHANGE THIS
-        if (rj - lj > 1){
-            laz[lc(j)] = laz[j];                                      // CHANGE THIS
-            laz_set[lc(j)] = true;
-            laz[rc(j)] = laz[j];                                      // CHANGE THIS
-            laz_set[rc(j)] = true;
-        }
-        laz[j] = 0;
-        laz_set[j] = false;
+};
+
+template<typename T>
+struct MaxInfo {
+    T x = -1e8;
+    MaxInfo() = default;
+    MaxInfo(T v) : x(v) {}
+    void apply(const SetTag<T>& t) { if (t.on) x = t.x; }
+    friend MaxInfo combine(const MaxInfo& a, const MaxInfo& b) {
+        MaxInfo r; 
+        r.x = max(a.x, b.x); 
+        return r;
     }
-    inline T cb(T resl, T resr){
-        return max(resl, resr);                             // CHANGE THIS
-    }
-    void build(int j, int lj, int rj, vector<T>& data){
-        if (rj == lj + 1){ d[j] = data[lj]; return; }
-        build(lc(j), lj, (lj + rj) / 2, data);
-        build(rc(j), (lj + rj) / 2, rj, data);
-        d[j] = cb(d[lc(j)], d[rc(j)]);
-    }
-    T r_que_aux(int li, int ri, int j, int lj, int rj){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { return BASE; }
-        if (lj >= li && rj <= ri) { return d[j]; }
-        return cb(r_que_aux(li, ri, lc(j), lj, (lj + rj) / 2), 
-            r_que_aux(li, ri, rc(j), (lj + rj) / 2, rj));
-    }
-    T r_que(int li, int ri) { return r_que_aux(li, ri, 0, 0, n); }
-    void r_set_aux(int li, int ri, T val, int j, int lj, int rj){
-        push(j, lj, rj);
-        if (lj >= ri || rj <= li || lj == rj) { return; }
-        if (li <= lj && rj <= ri){
-            laz[j] = val;                               // CHANGE THIS
-            laz_set[j] = true;
-            push(j, lj, rj);
-            return;
-        }
-        r_set_aux(li, ri, val, lc(j), lj, (lj + rj) / 2);
-        r_set_aux(li, ri, val, rc(j), (lj + rj) / 2, rj);
-        d[j] = cb(d[lc(j)], d[rc(j)]);
-    }
-    void r_set(int li, int ri, T val) { r_set_aux(li, ri, val, 0, 0, n); }
 };
 
 
